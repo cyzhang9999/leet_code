@@ -13,6 +13,10 @@ import tokenize
 import json
 from io import StringIO
 
+'''
+对中文分成单字的情况,会有问题
+'''
+
 class Test():
 
     def __init__(self):
@@ -25,9 +29,9 @@ class Test():
         value_stack = []
         opt_stack = []
         for each_token in expression_tokens:
-            print "#1",each_token
-            print "#2",value_stack
-            print "#3",opt_stack
+            #print "#1",each_token
+            #print "#2",value_stack
+            #print "#3",opt_stack
             if each_token == "(":
                 opt_stack.append(each_token)
             elif each_token == ")":
@@ -44,7 +48,7 @@ class Test():
                 else:
                     if opt_tmp:
                         opt_stack.append(opt_tmp)
-                    opt_stack.append(each_token)
+                opt_stack.append(each_token)
             else:
                 value = each_token[:each_token.find("[")]
                 others = each_token[each_token.find("[")+1:each_token.find("]")]
@@ -70,9 +74,13 @@ class Test():
             opt_tmp = opt_stack[i]
             self.logic_process(opt_tmp,value_stack)
         ret = self.stack_pop(value_stack)
+        if ret.keys()[0] == "condition":
+            ret = {"and":[ret]}
         return ret
 
     def logic_process(self,opt,value_stack):
+        print "#4",opt
+        print "#5",value_stack
         if opt == "not":
             v1 = self.stack_pop(value_stack)
             obj = {opt:v1}
@@ -82,9 +90,17 @@ class Test():
             v2 = self.stack_pop(value_stack)
             left_opt =  v2.keys()[0]
             right_opt = v1.keys()[0]
+            print v1,v2
             obj = {}
             if left_opt == opt and right_opt == opt:
-                obj = v2[opt].extend(v1[opt])
+                v2[opt].extend(v1[opt])
+                obj = v2
+            elif left_opt == opt:# and right_opt == "condition":
+                v2[opt].append(v1)
+                obj = v2
+            elif right_opt == opt:# and left_opt == "condition":
+                v1[opt].append(v2)
+                obj = v1
             else:
                 obj = {opt:[v1,v2]}
             value_stack.append(obj)
@@ -109,20 +125,21 @@ class Test():
         ori_tokens = tokenize.generate_tokens(StringIO(text.lower().decode("utf-8")).readline)
         tmp = ""
         in_bracket = False
+        last_end_pos = -1
         for each_token in ori_tokens:
+            cur_begin_pos = each_token[2][1]
+            cur_end_pos = each_token[3][1]
             each_token = each_token[1]
             if each_token in ["(",")"]:
                 expression_tokens.append(each_token)
                 continue
             elif each_token == "[":
-                #if len(tmp)>0:
-                #    expression_tokens.append(tmp)
                 tmp += each_token
                 in_bracket = True
                 continue
             elif each_token == "]":
                 tmp += each_token
-                expression_tokens.append(tmp)
+                expression_tokens.append(tmp.strip())
                 tmp = ""
                 in_bracket = False
                 continue
@@ -132,7 +149,11 @@ class Test():
                 if in_bracket:
                     tmp += each_token
                 else:
-                    tmp += " "+each_token
+                    if (cur_begin_pos-last_end_pos)==0:
+                        tmp += each_token
+                    else:
+                        tmp += " "+each_token
+            last_end_pos = cur_end_pos
         return expression_tokens
 
 if __name__ == "__main__":
@@ -141,5 +162,6 @@ if __name__ == "__main__":
     #trans = Translator()
     #ret = trans.pretranslate("Concomitant medications were not reported.")
     test = Test()
-    ret = test.expression_parser("((gastric cancer[Title,include]) OR NOT gastric cancer[Title/Abstract] OR gastric cancer[keyword]) AND karimi[Author] ")
+    #ret = test.expression_parser("((gastric cancer[Title,include]) OR NOT gastric cancer[Title/Abstract] OR gastric cancer[keyword]) AND karimi[Author] ")
+    ret = test.expression_parser("gastric cancer[Title,include]")
     print json.dumps(ret,ensure_ascii=False)
